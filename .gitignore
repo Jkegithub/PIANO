@@ -1,0 +1,17 @@
+# 300_PIANO
+# Material aus 140_MUSIC (Aufnahmen, Noten, Fremdaudio) bleibt lokal:
+# Rechtelage ungeklaert, Repo soll spaeter online gehen.
+_material/
+
+# Audio-Rohdaten nie versehentlich einchecken
+*.wav
+
+# Werkzeuge / Editor
+.claude/
+node_modules/
+.vscode/
+Thumbs.db
+desktop.ini
+
+# Projektregeln mit Losungsankern: nur lokal, nie oeffentlich
+CLAUDE.md

@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klangprobe</title>
+<style>
+  :root { --bg:#f6f4ef; --fg:#1d1b18; --mut:#6b665d; --line:#d8d3c8; --acc:#a4461e; --key:#fff; --keyb:#222; --hit:#e7b98f; --panel:#efece5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#171614; --fg:#ece8e0; --mut:#9a948a; --line:#34312c; --acc:#e08a5b; --key:#e9e5dc; --keyb:#0c0c0b; --hit:#e08a5b; --panel:#201f1c; } }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, sans-serif; overflow:hidden; }
+  .app { display:grid; grid-template-columns:1fr 300px; height:100vh; }
+  main { padding:16px; overflow:auto; }
+  aside { border-left:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; min-height:0; }
+  aside h2 { font-size:13px; margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:var(--mut); text-transform:uppercase; letter-spacing:.05em; }
+  #log { flex:1; overflow:auto; margin:0; padding:8px 12px; font:12px/1.5 ui-monospace, Consolas, monospace; white-space:pre-wrap; }
+  @media (max-width: 760px) { .app { grid-template-columns:1fr; grid-template-rows:1fr 200px; } aside { border-left:0; border-top:1px solid var(--line); } }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p, small { color:var(--mut); }
+  .row { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; margin:12px 0; }
+  button { font:inherit; padding:8px 16px; border:1px solid var(--acc); background:var(--acc); color:#fff; border-radius:6px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  label { display:flex; gap:8px; align-items:center; }
+  select { font:inherit; }
+  #kb { position:relative; height:110px; margin:16px 0; user-select:none; touch-action:none; }
+  .w, .b { position:absolute; top:0; border:1px solid var(--line); border-radius:0 0 3px 3px; }
+  .w { background:var(--key); height:100%; }
+  .b { background:var(--keyb); height:62%; z-index:1; }
+  .on { background:var(--hit) !important; }
+  /* Bedienfeld Computertastatur */
+  #pc { position:relative; height:132px; width:100%; max-width:640px; margin:8px 0 4px; user-select:none; }
+  .pk { position:absolute; display:flex; flex-direction:column; justify-content:space-between; align-items:center;
+        border:1px solid var(--line); border-radius:6px; padding:4px 0; font-size:12px; }
+  .pk b { font-size:16px; }
+  .pk.wk { background:var(--key); color:#1d1b18; top:62px; height:66px; }
+  .pk.bk { background:var(--keyb); color:#eee; top:0; height:58px; }
+  .pk.on { background:var(--hit); color:#1d1b18; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:13px; color:var(--mut); }
+  kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 5px; font:12px ui-monospace, monospace; color:var(--fg); }
+  #pedal { padding:2px 8px; border-radius:4px; border:1px solid var(--line); }
+  #pedal.on { background:var(--hit); color:#1d1b18; }
+  button.ghost { background:transparent; color:var(--acc); }
+  dialog { max-width:760px; width:calc(100% - 32px); max-height:85vh; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); padding:0; }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+  #docbody { padding:4px 20px 16px; overflow:auto; }
+  #docbody h1 { font-size:19px; } #docbody h2 { font-size:16px; margin-top:20px; }
+  #docbody table { border-collapse:collapse; width:100%; font-size:14px; }
+  #docbody td, #docbody th { border:1px solid var(--line); padding:4px 8px; text-align:left; vertical-align:top; }
+  #docbody pre { background:var(--panel); padding:8px 10px; border-radius:6px; overflow:auto; font-size:13px; }
+  #docbody code { font-family:ui-monospace, Consolas, monospace; }
+  .dochead { display:flex; justify-content:flex-end; padding:8px 12px 0; position:sticky; top:0; background:var(--bg); }
+</style>
+</head>
+<body>
+<div class="app">
+<main>
+<h1>300_PIANO: Klangprobe</h1>
+<p>Salamander Grand Piano v3 (Yamaha C5), Sustain-Pedal, Release-Geräusch.
+Die Frage, die geprüft wird: <b>Klingt es natürlich?</b></p>
+
+<div class="row">
+  <button id="start">Klang laden</button>
+  <span id="status">nicht geladen</span>
+  <button id="help" class="ghost">Anleitung Keyboard-Test</button>
+</div>
+
+<div class="row">
+  <label>Dynamik
+    <select id="profile">
+      <option value="neu" selected>Neu: v1–v16, 5 Stufen, ca. 30 dB</option>
+      <option value="alt">Alt (Probe 1): v4–v16, 4 Stufen, ca. 11 dB</option>
+    </select>
+  </label>
+  <label>Anschlag Computertastatur <input id="vel" type="range" min="1" max="127" value="80"> <span id="velv">80</span></label>
+  <label><input id="relnoise" type="checkbox" checked> Release-Geräusch</label>
+</div>
+
+<div id="kb"></div>
+
+<h2 style="font-size:15px;margin:20px 0 0">Computertastatur</h2>
+<div id="pc"></div>
+<div class="legend">
+  <span>Oktave <b id="oct">4</b>: <kbd>C</kbd> tiefer · <kbd>X</kbd> höher</span>
+  <span>Pedal: <kbd>Leertaste</kbd> halten <span id="pedal">aus</span></span>
+  <span>Anschlag: Schieberegler oben, ohne MIDI immer gleich stark</span>
+</div>
+
+<p style="margin-top:24px"><small>Samples: Salamander Grand Piano V3 von Alexander Holm, CC BY 3.0
+(creativecommons.org/licenses/by/3.0). MP3-Fassung: @audio-samples (darosh).</small></p>
+</main>
+<dialog id="doc">
+  <div class="dochead"><button id="docclose" class="ghost">Schließen</button></div>
+  <div id="docbody"></div>
+</dialog>
+<aside>
+  <h2>Tastenprotokoll</h2>
+  <pre id="log"></pre>
+</aside>
+</div>
+
+<script>
+'use strict';
+// ---- Konfiguration --------------------------------------------------------
+const BASE = 'https://cdn.jsdelivr.net/npm/@audio-samples/';
+const VER = '1.0.5';
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const RELEASE_TIME = 0.25;                 // Dämpfer: Abklingzeit nach Loslassen (s)
+
+// Gemessene Lautheit je Salamander-Stufe, RMS der ersten Sekunde von C4, dB (29.09.2026)
+const LAYER_DB = { 1:-38.5, 2:-34.3, 3:-32.1, 4:-30.3, 5:-28.8, 6:-28.1, 7:-27.0, 8:-26.4,
+                   9:-25.8, 10:-23.9, 11:-22.5, 12:-21.6, 13:-21.1, 14:-19.0, 15:-19.2, 16:-19.6 };
+
+// Dynamikprofile. "alt" ist Probe 1 unverändert, der Rückweg.
+const PROFILES = {
+  alt: { layers:[4, 8, 12, 16] },
+  // neu: Ziel-Lautheit folgt der Velocity; Stufe = die dem Ziel nächste, Rest per Verstärkung.
+  //      TOP = lautester Anschlag, RANGE = Abstand bis Velocity 1, CURVE formt den Verlauf.
+  neu: { layers:[1, 4, 8, 12, 16], TOP:-19.6, RANGE:30, CURVE:1.5 },
+};
+let profile = 'neu';
+
+// Gesampelte MIDI-Noten: A0 (21) bis C8 (108) in Kleinterzen
+const sampled = [];
+for (let m = 21; m <= 108; m += 3) sampled.push(m);
+const nameOf = m => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
+
+let ctx, master;
+const buffers = {};      // `${midi}v${layer}` -> AudioBuffer
+const relBuffers = {};   // midi -> AudioBuffer (Hammer-Release)
+const voices = new Map();
+const held = new Set();
+let sustain = false;
+const sustained = new Set();
+
+const $ = id => document.getElementById(id);
+const log = s => { $('log').textContent = s + '\n' + $('log').textContent.slice(0, 20000); };
+
+async function loadBuf(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status + ' ' + url);
+  return ctx.decodeAudioData(await r.arrayBuffer());
+}
+
+async function runJobs(jobs) {
+  let done = 0;
+  const run = async () => { while (jobs.length) { await jobs.shift()(); $('status').textContent = `lade … ${++done}`; } };
+  await Promise.all(Array.from({ length: 8 }, run));
+  return done;
+}
+
+function layerJobs(layers) {
+  const jobs = [];
+  for (const L of layers) for (const m of sampled) {
+    if (buffers[m + 'v' + L]) continue;
+    const file = encodeURIComponent(nameOf(m) + 'v' + L + '.mp3');
+    jobs.push(() => loadBuf(`${BASE}piano-mp3-velocity${L}@${VER}/audio/${file}`).then(b => buffers[m + 'v' + L] = b));
+  }
+  return jobs;
+}
+
+async function load() {
+  $('start').disabled = true; $('start').blur();
+  ctx = new AudioContext({ latencyHint: 'interactive' });
+  master = ctx.createGain(); master.gain.value = 0.8;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -6; comp.ratio.value = 4;
+  master.connect(comp).connect(ctx.destination);
+
+  const jobs = layerJobs(PROFILES[profile].layers);
+  for (let m = 21; m <= 108; m++) {
+    jobs.push(() => loadBuf(`${BASE}piano-mp3-release@${VER}/audio/rel${m - 20}.mp3`).then(b => relBuffers[m] = b).catch(() => {}));
+  }
+  const t0 = performance.now();
+  let done;
+  try { done = await runJobs(jobs); }
+  catch (e) { $('status').textContent = 'Fehler: ' + e.message; log(String(e)); return; }
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  $('status').textContent = `geladen: ${done} Dateien in ${secs} s`;
+  log(`Ladezeit ${secs} s · baseLatency ${(ctx.baseLatency*1000).toFixed(1)} ms · outputLatency ${((ctx.outputLatency||0)*1000).toFixed(1)} ms · ${ctx.sampleRate} Hz`);
+  initMidi();
+}
+
+async function switchProfile(p) {
+  profile = p;
+  log(`Dynamik: ${p === 'neu' ? 'Neu (v1–v16)' : 'Alt (v4–v16)'}`);
+  if (!ctx) return;
+  const jobs = layerJobs(PROFILES[p].layers);
+  if (!jobs.length) return;
+  try { const n = await runJobs(jobs); $('status').textContent = `nachgeladen: ${n} Dateien`; }
+  catch (e) { $('status').textContent = 'Fehler: ' + e.message; }
+}
+
+// ---- Dynamik ----------------------------------------------------------------
+// liefert { layer, gain, info }
+function dynamics(vel) {
+  const P = PROFILES[profile];
+  if (profile === 'alt') {
+    const i = Math.min(P.layers.length - 1, Math.floor((vel - 1) / 127 * P.layers.length));
+    const lo = i / P.layers.length * 127, hi = (i + 1) / P.layers.length * 127;
+    const gain = 0.7 + 0.3 * (vel - lo) / (hi - lo);
+    return { layer: P.layers[i], gain, info: '' };
+  }
+  const target = P.TOP - P.RANGE * Math.pow(1 - vel / 127, P.CURVE);
+  const layer = P.layers.reduce((a, b) => Math.abs(LAYER_DB[b] - target) < Math.abs(LAYER_DB[a] - target) ? b : a);
+  const gainDb = Math.min(3, target - LAYER_DB[layer]);
+  return { layer, gain: Math.pow(10, gainDb / 20), info: `  Ziel ${target.toFixed(1)} dB, ${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB` };
+}
+
+// ---- Klangerzeugung ---------------------------------------------------------
+function noteOn(m, vel) {
+  if (!ctx || m < 21 || m > 108) return;
+  if (voices.has(m)) stopVoice(m, 0.05);
+  const s = sampled.reduce((a, b) => Math.abs(b - m) < Math.abs(a - m) ? b : a);
+  const { layer, gain, info } = dynamics(vel);
+  const buf = buffers[s + 'v' + layer];
+  if (!buf) { log(`${nameOf(m)}: Stufe v${layer} noch nicht geladen`); return; }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = Math.pow(2, (m - s) / 12);
+  const g = ctx.createGain(); g.gain.value = gain;
+  src.connect(g).connect(master);
+  src.start();
+  voices.set(m, { src, g });
+  held.add(m); sustained.delete(m);
+  light(m, true);
+  log(`${nameOf(m).padEnd(4)} vel ${String(vel).padStart(3)} → v${layer}${info}`);
+}
+
+function stopVoice(m, t = RELEASE_TIME) {
+  const v = voices.get(m); if (!v) return;
+  const now = ctx.currentTime;
+  v.g.gain.cancelScheduledValues(now);
+  v.g.gain.setValueAtTime(v.g.gain.value, now);
+  v.g.gain.setTargetAtTime(0, now, t / 4);
+  v.src.stop(now + t * 2);
+  voices.delete(m);
+}
+
+function noteOff(m) {
+  if (!ctx) return;
+  held.delete(m);
+  light(m, false);
+  if (sustain) { sustained.add(m); return; }
+  stopVoice(m);
+  playRelease(m);
+}
+
+function playRelease(m) {
+  if (!$('relnoise').checked || !relBuffers[m]) return;
+  const src = ctx.createBufferSource(); src.buffer = relBuffers[m];
+  const g = ctx.createGain(); g.gain.value = 0.35;
+  src.connect(g).connect(master); src.start();
+}
+
+function setSustain(on) {
+  if (sustain === on) return;
+  sustain = on;
+  $('pedal').textContent = on ? 'gedrückt' : 'aus';
+  $('pedal').classList.toggle('on', on);
+  if (!on) { for (const m of sustained) if (!held.has(m)) { stopVoice(m, 0.4); } sustained.clear(); }
+}
+
+// ---- MIDI ---------------------------------------------------------------------
+async function initMidi() {
+  if (!navigator.requestMIDIAccess) { log('Web MIDI wird von diesem Browser nicht unterstützt.'); return; }
+  try {
+    const acc = await navigator.requestMIDIAccess();
+    const hook = () => {
+      const names = [...acc.inputs.values()].map(i => { i.onmidimessage = onMidi; return i.name; });
+      log('MIDI-Eingänge: ' + (names.length ? names.join(', ') : 'keiner gefunden'));
+    };
+    acc.onstatechange = hook; hook();
+  } catch (e) { log('MIDI nicht verfügbar: ' + e.message); }
+}
+function onMidi(e) {
+  const [st, d1, d2] = e.data, cmd = st & 0xf0;
+  if (cmd === 0x90 && d2 > 0) noteOn(d1, d2);
+  else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) noteOff(d1);
+  else if (cmd === 0xb0 && d1 === 64) setSustain(d2 >= 64);
+}
+
+// ---- Computertastatur ---------------------------------------------------------
+// Halbtonabstand zu C der gewählten Oktave. y und z beide belegt (QWERTZ/QWERTY).
+const KEYMAP = { a:0, w:1, s:2, e:3, d:4, f:5, t:6, g:7, z:8, y:8, h:9, u:10, j:11, k:12, o:13, l:14, p:15, 'ö':16, 'ä':17 };
+let octave = 4;
+const down = new Set();
+const pcMidi = k => 12 * (octave + 1) + KEYMAP[k];
+
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  const k = e.key.toLowerCase();
+  // Leertaste immer abfangen, auch bei Tastenwiederholung: sonst scrollt der Browser
+  if (k === ' ') { e.preventDefault(); setSustain(true); return; }
+  if (e.target.tagName === 'SELECT') return;
+  if (e.repeat) { if (k in KEYMAP) e.preventDefault(); return; }
+  if (k === 'x' || k === 'c') {
+    const o = Math.max(1, Math.min(7, octave + (k === 'x' ? 1 : -1)));
+    if (o !== octave) { for (const d of [...down]) { down.delete(d); noteOff(pcMidi(d)); pcLight(d, false); } octave = o; $('oct').textContent = octave; drawPc(); }
+    return;
+  }
+  if (k in KEYMAP && !down.has(k)) { e.preventDefault(); down.add(k); noteOn(pcMidi(k), +$('vel').value); pcLight(k, true); }
+});
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); setSustain(false); return; }
+  if (down.has(k)) { down.delete(k); noteOff(pcMidi(k)); pcLight(k, false); }
+});
+$('vel').oninput = () => $('velv').textContent = $('vel').value;
+$('profile').onchange = e => { switchProfile(e.target.value); e.target.blur(); };
+
+// Bedienfeld: welche PC-Taste spielt welchen Ton
+const PC_WHITE = ['a','s','d','f','g','h','j','k','l','ö','ä'];
+const PC_BLACK = { w:0, e:1, t:3, z:4, u:5, o:7, p:8 };   // Index der weißen Taste links davon
+const pcEls = {};
+function drawPc() {
+  const pc = $('pc'); pc.innerHTML = '';
+  const n = PC_WHITE.length, w = 100 / n;
+  PC_WHITE.forEach((k, i) => {
+    const d = document.createElement('div'); d.className = 'pk wk';
+    d.style.left = `calc(${i * w}% + 2px)`; d.style.width = `calc(${w}% - 4px)`;
+    d.innerHTML = `<b>${k.toUpperCase()}</b><span>${nameOf(pcMidi(k))}</span>`;
+    pc.appendChild(d); pcEls[k] = d;
+  });
+  for (const [k, i] of Object.entries(PC_BLACK)) {
+    const d = document.createElement('div'); d.className = 'pk bk';
+    d.style.left = `calc(${(i + 0.55) * w}% + 2px)`; d.style.width = `calc(${w * 0.9}% - 4px)`;
+    d.innerHTML = `<b>${k.toUpperCase()}</b><span>${nameOf(pcMidi(k))}</span>`;
+    pc.appendChild(d); pcEls[k] = d;
+  }
+  pcEls.y = pcEls.z;
+}
+function pcLight(k, on) { pcEls[k] && pcEls[k].classList.toggle('on', on); }
+drawPc();
+
+// ---- Bildschirmtastatur (88 Tasten) -----------------------------------------
+const keyEls = {};
+(function drawKeys() {
+  const kb = $('kb'); const isB = m => [1,3,6,8,10].includes(m % 12);
+  const whites = []; for (let m = 21; m <= 108; m++) if (!isB(m)) whites.push(m);
+  const w = 100 / whites.length;
+  whites.forEach((m, i) => { const d = document.createElement('div'); d.className = 'w'; d.style.left = i * w + '%'; d.style.width = w + '%'; d.dataset.m = m; kb.appendChild(d); keyEls[m] = d; });
+  for (let m = 21; m <= 108; m++) if (isB(m)) {
+    const i = whites.indexOf(m - 1); const d = document.createElement('div'); d.className = 'b';
+    d.style.left = (i + 0.68) * w + '%'; d.style.width = w * 0.64 + '%'; d.dataset.m = m; kb.appendChild(d); keyEls[m] = d;
+  }
+  kb.addEventListener('pointerdown', e => { const m = +e.target.dataset.m; if (m) { noteOn(m, +$('vel').value); const up = () => { noteOff(m); removeEventListener('pointerup', up); }; addEventListener('pointerup', up); } });
+})();
+function light(m, on) { keyEls[m] && keyEls[m].classList.toggle('on', on); }
+
+$('start').onclick = load;
+
+// ---- Anleitung: die Markdown-Datei ist die einzige Quelle, hier nur dargestellt ----
+function mdToHtml(md) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  const out = []; const lines = md.split(/\r?\n/); let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) { const buf = []; i++; while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++].trim()); i++; out.push('<pre><code>' + esc(buf.join('\n')) + '</code></pre>'); continue; }
+    if (/^#{1,3} /.test(l)) { const n = l.match(/^#+/)[0].length; out.push(`<h${n}>${inline(l.slice(n + 1))}</h${n}>`); i++; continue; }
+    if (/^\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()));
+      const body = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r));
+      out.push('<table><tr>' + cells(body[0]).map(c => `<th>${c}</th>`).join('') + '</tr>' +
+        body.slice(1).map(r => '<tr>' + cells(r).map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</table>');
+      continue;
+    }
+    if (/^(\d+\.|-) /.test(l)) {
+      const ol = /^\d/.test(l); const items = [];
+      while (i < lines.length && (/^(\d+\.|-) /.test(lines[i]) || /^\s{2,}\S/.test(lines[i]) && !/^\s*```/.test(lines[i]))) {
+        const it = items[items.length - 1];
+        if (/^(\d+\.|-) /.test(lines[i])) items.push({ txt: lines[i].replace(/^(\d+\.|-) /, ''), code: '', after: '' });
+        else if (it.code) it.after += ' ' + lines[i].trim(); else it.txt += ' ' + lines[i].trim();
+        i++;
+        if (i < lines.length && /^\s*```/.test(lines[i])) { const buf = []; i++; while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++].trim()); i++; items[items.length - 1].code = buf.join('\n'); }
+      }
+      const li = items.map(t => '<li>' + inline(t.txt) + (t.code ? '<pre><code>' + esc(t.code) + '</code></pre>' : '') + (t.after ? inline(t.after) : '') + '</li>');
+      out.push((ol ? '<ol>' : '<ul>') + li.join('') + (ol ? '</ol>' : '</ul>'));
+      continue;
+    }
+    if (l.trim()) { const buf = [l]; i++; while (i < lines.length && lines[i].trim() && !/^(#|\||```|\d+\. |- )/.test(lines[i])) buf.push(lines[i++]); out.push('<p>' + inline(buf.join(' ')) + '</p>'); continue; }
+    i++;
+  }
+  return out.join('\n');
+}
+$('help').onclick = async () => {
+  try {
+    const r = await fetch('ANLEITUNG_Keyboardtest.md', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    $('docbody').innerHTML = mdToHtml(await r.text());
+  } catch (e) {
+    // Als Datei geöffnet (file://) blockiert der Browser fetch; dann direkt verlinken
+    $('docbody').innerHTML = location.protocol === 'file:'
+      ? '<p><b>Die Seite ist als Datei geöffnet</b>, dort darf sie die Anleitung nicht nachladen.</p>' +
+        '<p><a href="ANLEITUNG_Keyboardtest.md" target="_blank">Anleitung als Text öffnen</a>, ' +
+        'oder die Seite über <code>http://localhost:8765</code> aufrufen (Server siehe Anleitung).</p>'
+      : '<p>Anleitung nicht ladbar (' + e.message + '). <a href="ANLEITUNG_Keyboardtest.md" target="_blank">Direkt öffnen</a></p>';
+  }
+  $('doc').showModal(); $('help').blur();
+};
+$('docclose').onclick = () => $('doc').close();
+</script>
+</body>
+</html>
