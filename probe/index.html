@@ -10,19 +10,21 @@
   * { box-sizing:border-box; }
   html, body { height:100%; }
   body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, sans-serif; overflow:hidden; }
-  .app { display:grid; grid-template-columns:1fr 300px; height:100vh; }
+  .app { display:grid; grid-template-columns:minmax(0,1fr) 300px; height:100vh; }
   main { padding:16px; overflow:auto; }
   aside { border-left:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; min-height:0; }
   aside h2 { font-size:13px; margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:var(--mut); text-transform:uppercase; letter-spacing:.05em; }
   #log { flex:1; overflow:auto; margin:0; padding:8px 12px; font:12px/1.5 ui-monospace, Consolas, monospace; white-space:pre-wrap; }
-  @media (max-width: 760px) { .app { grid-template-columns:1fr; grid-template-rows:1fr 200px; } aside { border-left:0; border-top:1px solid var(--line); } }
+  @media (max-width: 760px) { .app { grid-template-columns:minmax(0,1fr); grid-template-rows:1fr 200px; } aside { border-left:0; border-top:1px solid var(--line); } }
   h1 { font-size:20px; margin:0 0 4px; }
   p, small { color:var(--mut); }
   .row { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; margin:12px 0; }
   button { font:inherit; padding:8px 16px; border:1px solid var(--acc); background:var(--acc); color:#fff; border-radius:6px; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
   label { display:flex; gap:8px; align-items:center; }
-  select { font:inherit; }
+  select { font:inherit; max-width:100%; }
+  label { max-width:100%; }
+  #vel { min-width:0; flex:1; }
   #kb { position:relative; height:110px; margin:16px 0; user-select:none; touch-action:none; }
   .w, .b { position:absolute; top:0; border:1px solid var(--line); border-radius:0 0 3px 3px; }
   .w { background:var(--key); height:100%; }
@@ -49,6 +51,23 @@
   #docbody td, #docbody th { border:1px solid var(--line); padding:4px 8px; text-align:left; vertical-align:top; }
   #docbody pre { background:var(--panel); padding:8px 10px; border-radius:6px; overflow:auto; font-size:13px; }
   #docbody code { font-family:ui-monospace, Consolas, monospace; }
+  /* Touch-Modus */
+  #touch { display:none; }
+  body.touch #touch { display:block; }
+  body.touch #pcwrap { display:none; }
+  body.touch #kb { height:56px; cursor:pointer; }
+  .win { position:absolute; top:-3px; bottom:-3px; border:3px solid var(--acc); border-radius:4px; pointer-events:none; z-index:2; }
+  #tk { position:relative; height:min(46vh, 300px); min-height:150px; margin:8px 0; touch-action:none;
+        user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  .tw, .tb { position:absolute; top:0; border:1px solid var(--line); border-radius:0 0 8px 8px; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; font-size:12px; }
+  .tw { background:var(--key); color:#6b665d; height:100%; }
+  .tb { background:var(--keyb); height:60%; z-index:1; }
+  .tbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tbar button { min-width:48px; min-height:44px; }
+  #tpedal { flex:1; min-height:56px; font-size:17px; background:transparent; color:var(--acc); }
+  #tpedal.on { background:var(--acc); color:#fff; }
+  .hint { font-size:13px; }
+  @media (max-width: 760px) { .app { grid-template-rows:1fr 110px; } main { padding:12px; } h1 { font-size:17px; } main > p { display:none; } }
   .dochead { display:flex; justify-content:flex-end; padding:8px 12px 0; position:sticky; top:0; background:var(--bg); }
 </style>
 </head>
@@ -74,16 +93,31 @@ Die Frage, die geprüft wird: <b>Klingt es natürlich?</b></p>
   </label>
   <label>Anschlag Computertastatur <input id="vel" type="range" min="1" max="127" value="80"> <span id="velv">80</span></label>
   <label><input id="relnoise" type="checkbox" checked> Release-Geräusch</label>
+  <label><input id="touchmode" type="checkbox"> Touch-Modus</label>
 </div>
 
 <div id="kb"></div>
 
+<div id="touch">
+  <div class="tbar">
+    <button id="tleft" class="ghost" aria-label="tiefer">◀</button>
+    <button id="tright" class="ghost" aria-label="höher">▶</button>
+    <button id="tpedal">Pedal</button>
+  </div>
+  <div id="tk"></div>
+  <p class="hint">Oben auf der Taste leise, unten laut. Mehrere Finger gleichzeitig gehen. Mit ◀ ▶ oder
+  durch Tippen auf die kleine Tastatur oben verschieben. Pedal antippen = gehalten, nochmal = los.
+  iPhone: Stummschalter aus, sonst kein Ton.</p>
+</div>
+
+<div id="pcwrap">
 <h2 style="font-size:15px;margin:20px 0 0">Computertastatur</h2>
 <div id="pc"></div>
 <div class="legend">
   <span>Oktave <b id="oct">4</b>: <kbd>C</kbd> tiefer · <kbd>X</kbd> höher</span>
   <span>Pedal: <kbd>Leertaste</kbd> halten <span id="pedal">aus</span></span>
   <span>Anschlag: Schieberegler oben, ohne MIDI immer gleich stark</span>
+</div>
 </div>
 
 <p style="margin-top:24px"><small>Samples: Salamander Grand Piano V3 von Alexander Holm, CC BY 3.0
@@ -257,6 +291,7 @@ function setSustain(on) {
   sustain = on;
   $('pedal').textContent = on ? 'gedrückt' : 'aus';
   $('pedal').classList.toggle('on', on);
+  $('tpedal').classList.toggle('on', on);
   if (!on) { for (const m of sustained) if (!held.has(m)) { stopVoice(m, 0.4); } sustained.clear(); }
 }
 
@@ -343,9 +378,89 @@ const keyEls = {};
     const i = whites.indexOf(m - 1); const d = document.createElement('div'); d.className = 'b';
     d.style.left = (i + 0.68) * w + '%'; d.style.width = w * 0.64 + '%'; d.dataset.m = m; kb.appendChild(d); keyEls[m] = d;
   }
-  kb.addEventListener('pointerdown', e => { const m = +e.target.dataset.m; if (m) { noteOn(m, +$('vel').value); const up = () => { noteOff(m); removeEventListener('pointerup', up); }; addEventListener('pointerup', up); } });
+  // Im Touch-Modus ist die kleine Tastatur nur Navigator, sonst spielbar
+  kb.addEventListener('pointerdown', e => {
+    if (!document.body.classList.contains('touch')) return;
+    const r = kb.getBoundingClientRect();
+    tStart = Math.round((e.clientX - r.left) / r.width * WHITES.length - tCount / 2);
+    drawTouch();
+  });
+  attachPlay(kb, () => +$('vel').value, () => !document.body.classList.contains('touch'));
 })();
-function light(m, on) { keyEls[m] && keyEls[m].classList.toggle('on', on); }
+function light(m, on) {
+  keyEls[m] && keyEls[m].classList.toggle('on', on);
+  tkEls[m] && tkEls[m].classList.toggle('on', on);
+}
+
+// Spielen per Zeiger: jeder Finger (pointerId) für sich, Gleiten über die Tasten erlaubt
+function attachPlay(el, velFn, enabled = () => true) {
+  const active = new Map();   // pointerId -> midi
+  const keyAt = e => { const t = document.elementFromPoint(e.clientX, e.clientY); return t && el.contains(t) && +t.dataset.m ? t : null; };
+  const press = (id, t, e) => { const m = +t.dataset.m; active.set(id, m); noteOn(m, velFn(t, e)); };
+  el.addEventListener('pointerdown', e => {
+    if (!enabled()) return;
+    e.preventDefault();
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    const t = keyAt(e); if (t) press(e.pointerId, t, e);
+  });
+  el.addEventListener('pointermove', e => {
+    if (!active.has(e.pointerId)) return;
+    const t = keyAt(e); const m = t ? +t.dataset.m : null;
+    if (m === active.get(e.pointerId)) return;
+    noteOff(active.get(e.pointerId)); active.delete(e.pointerId);
+    if (t) press(e.pointerId, t, e);
+  });
+  const end = e => { if (active.has(e.pointerId)) { noteOff(active.get(e.pointerId)); active.delete(e.pointerId); } };
+  addEventListener('pointerup', end); addEventListener('pointercancel', end);
+  el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') end(e); });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+// ---- Touch-Tastatur: Ausschnitt mit großen Tasten ---------------------------
+const isBlack = m => [1,3,6,8,10].includes(m % 12);
+const WHITES = []; for (let m = 21; m <= 108; m++) if (!isBlack(m)) WHITES.push(m);
+let tStart = WHITES.indexOf(60), tCount = 10;
+const tkEls = {};
+function drawTouch() {
+  const tk = $('tk'); tk.innerHTML = '';
+  for (const k in tkEls) delete tkEls[k];
+  tCount = Math.max(7, Math.min(21, Math.floor(tk.clientWidth / 52) || 10));
+  tStart = Math.max(0, Math.min(WHITES.length - tCount, tStart));
+  const ws = WHITES.slice(tStart, tStart + tCount), w = 100 / ws.length;
+  ws.forEach((m, i) => {
+    const d = document.createElement('div'); d.className = 'tw'; d.dataset.m = m;
+    d.style.left = i * w + '%'; d.style.width = w + '%';
+    if (m % 12 === 0) d.textContent = nameOf(m);
+    tk.appendChild(d); tkEls[m] = d;
+    if (i < ws.length - 1 && isBlack(m + 1)) {
+      const b = document.createElement('div'); b.className = 'tb'; b.dataset.m = m + 1;
+      b.style.left = (i + 0.65) * w + '%'; b.style.width = w * 0.7 + '%';
+      tk.appendChild(b); tkEls[m + 1] = b;
+    }
+  });
+  // Fenster auf der kleinen Tastatur markieren
+  let win = document.querySelector('.win');
+  if (!win) { win = document.createElement('div'); win.className = 'win'; $('kb').appendChild(win); }
+  win.style.left = tStart / WHITES.length * 100 + '%'; win.style.width = tCount / WHITES.length * 100 + '%';
+  for (const m of held) light(m, true);
+}
+// Anschlag aus der Tippposition: oben leise, unten laut
+attachPlay($('tk'), (t, e) => {
+  const r = t.getBoundingClientRect();
+  const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  return Math.max(1, Math.min(127, Math.round(15 + y * 112)));
+});
+$('tleft').onclick = () => { tStart -= Math.max(1, tCount - 3); drawTouch(); };
+$('tright').onclick = () => { tStart += Math.max(1, tCount - 3); drawTouch(); };
+$('tpedal').onclick = () => { setSustain(!sustain); $('tpedal').blur(); };
+function setTouch(on) {
+  document.body.classList.toggle('touch', on); $('touchmode').checked = on;
+  const win = document.querySelector('.win'); if (win) win.style.display = on ? '' : 'none';
+  if (on) drawTouch();
+}
+$('touchmode').onchange = e => { setTouch(e.target.checked); e.target.blur(); };
+addEventListener('resize', () => { if (document.body.classList.contains('touch')) drawTouch(); });
+setTouch(matchMedia('(pointer: coarse)').matches);
 
 $('start').onclick = load;
 

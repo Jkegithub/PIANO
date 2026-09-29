@@ -3,7 +3,7 @@
 Ein Klavier im Browser zum Lernen und zum Spielen, für Anfänger wie für Fortgeschrittene.
 Die Klangfarbe soll natürlich sein, nicht synthetisch.
 
-**Stand:** Klangprobe (29.09.2026). Spielbar über Computertastatur, Maus oder MIDI-Keyboard.
+**Stand:** Klangprobe (29.09.2026). Spielbar über Computertastatur, Maus, Touch oder MIDI-Keyboard.
 Der Lernmodus folgt.
 
 **Online:** https://jkegithub.github.io/PIANO/
@@ -12,6 +12,7 @@ Der Lernmodus folgt.
 
 - **Klang laden** klicken; die Samples kommen vom jsDelivr-CDN (ca. 27 MB)
 - Computertastatur: `A`–`Ä` weiße Tasten, `W E T Z U O P` schwarze, `C`/`X` Oktave, Leertaste = Pedal
+- Handy/Tablet: Der Touch-Modus schaltet sich automatisch ein. Große Tasten, oben leise und unten laut, mehrere Finger, ◀ ▶ zum Verschieben, Pedal-Knopf. iPhone: Stummschalter aus
 - MIDI-Keyboard: in Chrome, Edge, Firefox und Brave; nicht in Safari und auf iPhone/iPad
 - Anleitung für den Test mit Keyboard: [probe/ANLEITUNG_Keyboardtest.md](probe/ANLEITUNG_Keyboardtest.md)
 
