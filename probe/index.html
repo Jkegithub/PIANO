@@ -51,6 +51,12 @@
   #docbody td, #docbody th { border:1px solid var(--line); padding:4px 8px; text-align:left; vertical-align:top; }
   #docbody pre { background:var(--panel); padding:8px 10px; border-radius:6px; overflow:auto; font-size:13px; }
   #docbody code { font-family:ui-monospace, Consolas, monospace; }
+  /* Aufnahme / Abspielen */
+  #rec.on { background:#c0392b; border-color:#c0392b; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.65; } }
+  #play.on { background:var(--fg); border-color:var(--fg); color:var(--bg); }
+  .filebtn { display:inline-flex; align-items:center; padding:8px 16px; border:1px solid var(--acc); color:var(--acc); border-radius:6px; cursor:pointer; }
+  #seqinfo { font-variant-numeric:tabular-nums; color:var(--mut); }
   /* Touch-Modus */
   #touch { display:none; }
   body.touch #touch { display:block; }
@@ -94,6 +100,14 @@ Die Frage, die geprüft wird: <b>Klingt es natürlich?</b></p>
   <label>Anschlag Computertastatur <input id="vel" type="range" min="1" max="127" value="80"> <span id="velv">80</span></label>
   <label><input id="relnoise" type="checkbox" checked> Release-Geräusch</label>
   <label><input id="touchmode" type="checkbox"> Touch-Modus</label>
+</div>
+
+<div class="row">
+  <button id="rec">● Aufnahme</button>
+  <button id="play">▶ Abspielen</button>
+  <span id="seqinfo">keine Aufnahme</span>
+  <button id="save" class="ghost">Als MIDI speichern</button>
+  <label class="filebtn">MIDI-Datei laden<input id="load" type="file" accept=".mid,.midi,audio/midi" hidden></label>
 </div>
 
 <div id="kb"></div>
@@ -166,6 +180,12 @@ const voices = new Map();
 const held = new Set();
 let sustain = false;
 const sustained = new Set();
+
+// Aufnahme: {t ms seit Start, type 'on'|'off'|'ped', m, v}
+const rec = { on:false, t0:0, ev:[] };
+const player = { on:false, timers:[] };
+let seq = [], seqName = '';
+function recEvent(type, m, v) { if (rec.on && !player.on) rec.ev.push({ t: performance.now() - rec.t0, type, m, v }); }
 
 const $ = id => document.getElementById(id);
 const log = s => { $('log').textContent = s + '\n' + $('log').textContent.slice(0, 20000); };
@@ -256,6 +276,7 @@ function noteOn(m, vel) {
   src.start();
   voices.set(m, { src, g });
   held.add(m); sustained.delete(m);
+  recEvent('on', m, vel);
   light(m, true);
   log(`${nameOf(m).padEnd(4)} vel ${String(vel).padStart(3)} → v${layer}${info}`);
 }
@@ -272,6 +293,7 @@ function stopVoice(m, t = RELEASE_TIME) {
 
 function noteOff(m) {
   if (!ctx) return;
+  if (held.has(m)) recEvent('off', m, 0);
   held.delete(m);
   light(m, false);
   if (sustain) { sustained.add(m); return; }
@@ -289,6 +311,7 @@ function playRelease(m) {
 function setSustain(on) {
   if (sustain === on) return;
   sustain = on;
+  recEvent('ped', 0, on ? 127 : 0);
   $('pedal').textContent = on ? 'gedrückt' : 'aus';
   $('pedal').classList.toggle('on', on);
   $('tpedal').classList.toggle('on', on);
@@ -461,6 +484,146 @@ function setTouch(on) {
 $('touchmode').onchange = e => { setTouch(e.target.checked); e.target.blur(); };
 addEventListener('resize', () => { if (document.body.classList.contains('touch')) drawTouch(); });
 setTouch(matchMedia('(pointer: coarse)').matches);
+
+// ---- Aufnahme und Abspielen ------------------------------------------------
+const fmt = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const noteCount = s => s.filter(e => e.type === 'on').length;
+function showSeq() {
+  $('seqinfo').textContent = seq.length ? `${seqName}: ${noteCount(seq)} Töne, ${fmt(seq[seq.length - 1].t)}` : 'keine Aufnahme';
+  $('play').disabled = $('save').disabled = !seq.length;
+}
+let recTimer;
+function startRec() {
+  if (!ctx) { $('seqinfo').textContent = 'erst „Klang laden“'; return; }
+  stopPlay();
+  rec.ev = []; rec.t0 = performance.now(); rec.on = true;
+  if (sustain) recEvent('ped', 0, 127);
+  $('rec').classList.add('on'); $('rec').textContent = '■ Stopp';
+  recTimer = setInterval(() => $('seqinfo').textContent = `Aufnahme läuft ${fmt(performance.now() - rec.t0)} · ${noteCount(rec.ev)} Töne`, 250);
+}
+function stopRec() {
+  rec.on = false; clearInterval(recTimer);
+  $('rec').classList.remove('on'); $('rec').textContent = '● Aufnahme';
+  // noch gedrückte Tasten und Pedal am Ende sauber schließen
+  const end = performance.now() - rec.t0;
+  for (const m of held) rec.ev.push({ t: end, type: 'off', m, v: 0 });
+  if (sustain) rec.ev.push({ t: end, type: 'ped', m: 0, v: 0 });
+  if (noteCount(rec.ev)) {
+    const t0 = rec.ev.find(e => e.type === 'on').t;           // Stille am Anfang abschneiden
+    seq = rec.ev.map(e => ({ ...e, t: Math.max(0, e.t - t0 + 300) }));
+    seqName = 'Aufnahme ' + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    try { localStorage.setItem('piano.lastTake', JSON.stringify({ seqName, seq })); } catch (e) {}
+  }
+  showSeq();
+}
+function playSeq() {
+  if (!ctx) { $('seqinfo').textContent = 'erst „Klang laden“'; return; }
+  if (rec.on) stopRec();
+  stopPlay();
+  player.on = true; $('play').classList.add('on'); $('play').textContent = '■ Stopp';
+  for (const e of seq) player.timers.push(setTimeout(() => {
+    if (e.type === 'on') { noteOn(e.m, e.v); followTouch(e.m); }
+    else if (e.type === 'off') noteOff(e.m);
+    else setSustain(e.v >= 64);
+  }, e.t));
+  player.timers.push(setTimeout(stopPlay, seq[seq.length - 1].t + 400));
+  log(`Abspielen: ${seqName}`);
+}
+function stopPlay() {
+  if (!player.on) return;
+  player.timers.forEach(clearTimeout); player.timers = [];
+  player.on = false;
+  for (const m of [...held]) noteOff(m);
+  setSustain(false);
+  $('play').classList.remove('on'); $('play').textContent = '▶ Abspielen';
+}
+// Im Touch-Modus den Ausschnitt mitführen, damit die gespielten Tasten sichtbar sind
+function followTouch(m) {
+  if (!document.body.classList.contains('touch')) return;
+  const w = WHITES.indexOf(isBlack(m) ? m - 1 : m);
+  if (w < tStart || w >= tStart + tCount) { tStart = w - Math.floor(tCount / 2); drawTouch(); }
+}
+$('rec').onclick = () => { rec.on ? stopRec() : startRec(); $('rec').blur(); };
+$('play').onclick = () => { player.on ? stopPlay() : playSeq(); $('play').blur(); };
+
+// ---- MIDI-Datei schreiben (Format 0, 480 Ticks je Viertel, 120 BPM: 1 Tick = 1,0417 ms) ----
+function toMidi(s) {
+  const vlq = n => { const b = [n & 0x7f]; while ((n >>= 7)) b.unshift((n & 0x7f) | 0x80); return b; };
+  const trk = [0, 0xff, 0x51, 3, 0x07, 0xa1, 0x20];          // Tempo 500000 µs
+  let last = 0;
+  for (const e of [...s].sort((a, b) => a.t - b.t)) {
+    const tick = Math.round(e.t * 0.96); trk.push(...vlq(tick - last)); last = tick;
+    if (e.type === 'on') trk.push(0x90, e.m, e.v);
+    else if (e.type === 'off') trk.push(0x80, e.m, 64);
+    else trk.push(0xb0, 64, e.v);
+  }
+  trk.push(0, 0xff, 0x2f, 0);
+  const u32 = n => [n >>> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return new Uint8Array([0x4d,0x54,0x68,0x64, ...u32(6), 0,0, 0,1, 0x01,0xe0,
+                         0x4d,0x54,0x72,0x6b, ...u32(trk.length), ...trk]);
+}
+$('save').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([toMidi(seq)], { type: 'audio/midi' }));
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  a.download = `piano_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.mid`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); $('save').blur();
+};
+
+// ---- MIDI-Datei lesen (Format 0/1, Tempowechsel, Schlagzeugkanal 10 ausgelassen) ----
+function fromMidi(buf) {
+  const d = new DataView(buf); let p = 0;
+  const str = n => { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(d.getUint8(p + i)); p += n; return s; };
+  const u32 = () => { const v = d.getUint32(p); p += 4; return v; }, u16 = () => { const v = d.getUint16(p); p += 2; return v; };
+  const vlq = () => { let v = 0, b; do { b = d.getUint8(p++); v = (v << 7) | (b & 0x7f); } while (b & 0x80); return v; };
+  if (str(4) !== 'MThd') throw new Error('keine MIDI-Datei');
+  const hl = u32(); u16(); const ntr = u16(), ppq = u16(); p += hl - 6;
+  if (ppq & 0x8000) throw new Error('SMPTE-Zeitbasis nicht unterstützt');
+  const raw = [], tempos = [{ tick: 0, us: 500000 }];
+  for (let t = 0; t < ntr && p < d.byteLength; t++) {
+    const id = str(4), len = u32(), end = p + len;
+    if (id !== 'MTrk') { p = end; continue; }
+    let tick = 0, rs = 0;
+    while (p < end) {
+      tick += vlq();
+      let st = d.getUint8(p);
+      if (st & 0x80) p++; else st = rs;
+      if (st === 0xff) { const type = d.getUint8(p++), l = vlq();
+        if (type === 0x51) tempos.push({ tick, us: (d.getUint8(p) << 16) | (d.getUint8(p + 1) << 8) | d.getUint8(p + 2) });
+        p += l; continue; }
+      if (st === 0xf0 || st === 0xf7) { p += vlq(); continue; }
+      rs = st; const cmd = st & 0xf0, ch = st & 0x0f;
+      const a = d.getUint8(p++), b = (cmd === 0xc0 || cmd === 0xd0) ? 0 : d.getUint8(p++);
+      if (ch === 9) continue;
+      if (cmd === 0x90 && b > 0) raw.push({ tick, type: 'on', m: a, v: b });
+      else if (cmd === 0x80 || cmd === 0x90) raw.push({ tick, type: 'off', m: a, v: 0 });
+      else if (cmd === 0xb0 && a === 64) raw.push({ tick, type: 'ped', m: 0, v: b });
+    }
+    p = end;
+  }
+  tempos.sort((x, y) => x.tick - y.tick);
+  const ms = tick => { let t = 0, prev = tempos[0];
+    for (const tp of tempos.slice(1)) { if (tp.tick >= tick) break; t += (tp.tick - prev.tick) * prev.us / ppq / 1000; prev = tp; }
+    return t + (tick - prev.tick) * prev.us / ppq / 1000; };
+  const order = { off: 0, ped: 1, on: 2 };
+  return raw.map(e => ({ t: ms(e.tick), type: e.type, m: e.m, v: e.v }))
+            .filter(e => e.type === 'ped' || (e.m >= 21 && e.m <= 108))
+            .sort((x, y) => x.t - y.t || order[x.type] - order[y.type]);
+}
+$('load').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = fromMidi(await f.arrayBuffer());
+    if (!noteCount(s)) throw new Error('keine Töne gefunden');
+    const t0 = s.find(x => x.type === 'on').t;
+    seq = s.map(x => ({ ...x, t: Math.max(0, x.t - t0 + 300) })); seqName = f.name;
+    showSeq(); log(`Geladen: ${f.name}`);
+  } catch (err) { $('seqinfo').textContent = 'Datei nicht lesbar: ' + err.message; }
+  e.target.value = '';
+};
+
+try { const last = JSON.parse(localStorage.getItem('piano.lastTake')); if (last && last.seq.length) { seq = last.seq; seqName = last.seqName; } } catch (e) {}
+showSeq();
 
 $('start').onclick = load;
 

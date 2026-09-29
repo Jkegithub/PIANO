@@ -14,6 +14,9 @@ Der Lernmodus folgt.
 - Computertastatur: `A`–`Ä` weiße Tasten, `W E T Z U O P` schwarze, `C`/`X` Oktave, Leertaste = Pedal
 - Handy/Tablet: Der Touch-Modus schaltet sich automatisch ein. Große Tasten, oben leise und unten laut, mehrere Finger, ◀ ▶ zum Verschieben, Pedal-Knopf. iPhone: Stummschalter aus
 - MIDI-Keyboard: in Chrome, Edge, Firefox und Brave; nicht in Safari und auf iPhone/iPad
+- **● Aufnahme** schneidet ab dem Klick alles Gespielte mit, samt Pedal. Die letzte Aufnahme bleibt im Browser gespeichert
+- **▶ Abspielen** spielt die Aufnahme oder eine geladene MIDI-Datei ab; die Tasten leuchten mit
+- **Als MIDI speichern / MIDI-Datei laden:** Aufnahmen sichern und fremde Sequenzen abspielen
 - Anleitung für den Test mit Keyboard: [probe/ANLEITUNG_Keyboardtest.md](probe/ANLEITUNG_Keyboardtest.md)
 
 ## Klangquelle
